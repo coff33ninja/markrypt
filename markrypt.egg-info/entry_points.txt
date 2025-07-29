@@ -1,0 +1,4 @@
+[console_scripts]
+markrypt = markrypt.cli:main
+markrypt-decrypt = markrypt.decrypt.cli:main
+markrypt-encrypt = markrypt.encrypt.cli:main

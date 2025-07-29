@@ -1,0 +1,8 @@
+Unicode Test: 🚀 Hello World! 🌍
+Special characters: àáâãäåæçèéêë
+Math symbols: ∑∏∆∇∂∫√∞
+Emojis: 😀😂😊🔥⭐💡
+Chinese: 你好世界
+Japanese: こんにちは世界
+Arabic: مرحبا بالعالم
+Russian: Привет мир

@@ -1,0 +1,16 @@
+
+[api]
+fastapi
+uvicorn
+
+[crypto]
+cryptography
+
+[full]
+cryptography
+qrcode[pil]
+fastapi
+uvicorn
+
+[qr]
+qrcode[pil]

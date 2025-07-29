@@ -81,28 +81,182 @@ def run_tests():
         sys.exit(1)
 
 
+def run_pqc_keygen():
+    """Generate post-quantum cryptography keypairs"""
+    parser = argparse.ArgumentParser(
+        prog="markrypt pqc-keygen",
+        description="Generate post-quantum cryptography keypairs"
+    )
+    parser.add_argument('--type', choices=['kyber', 'dilithium'], default='kyber',
+                       help='Type of keypair to generate (default: kyber)')
+    parser.add_argument('--output-dir', help='Output directory for keys (default: current directory)')
+    parser.add_argument('--prefix', default='markrypt', help='Prefix for key files (default: markrypt)')
+    
+    args = parser.parse_args(sys.argv[2:])
+    
+    try:
+        from markrypt import Markrypt
+        mk = Markrypt(enable_pqc=True)
+        
+        print(f"🔮 Generating {args.type} keypair...")
+        keypair = mk.generate_pqc_keypair(args.type)
+        
+        # Determine output directory
+        output_dir = Path(args.output_dir) if args.output_dir else Path.cwd()
+        output_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Write keys to files
+        public_key_file = output_dir / f"{args.prefix}_{args.type}_public.key"
+        secret_key_file = output_dir / f"{args.prefix}_{args.type}_secret.key"
+        
+        public_key_file.write_text(keypair['public_key'])
+        secret_key_file.write_text(keypair['secret_key'])
+        
+        print(f"✅ Keypair generated successfully!")
+        print(f"📁 Public key: {public_key_file}")
+        print(f"🔐 Secret key: {secret_key_file}")
+        print(f"⚠️  Keep the secret key safe and never share it!")
+        
+    except Exception as e:
+        print(f"❌ Failed to generate keypair: {e}")
+        print("Install PQC dependencies: pip install markrypt[pqc]")
+        sys.exit(1)
+
+
+def run_stego_hide():
+    """Hide message in image using steganography"""
+    parser = argparse.ArgumentParser(
+        prog="markrypt stego-hide",
+        description="Hide encrypted message in image"
+    )
+    parser.add_argument('message', help='Message to hide')
+    parser.add_argument('--key', required=True, help='Encryption key')
+    parser.add_argument('--image', required=True, help='Cover image path')
+    parser.add_argument('--output', required=True, help='Output image path')
+    parser.add_argument('--stego-password', help='Additional steganography password')
+    parser.add_argument('--cipher-mode', choices=['substitution', 'chacha20'], 
+                       default='chacha20', help='Encryption mode (default: chacha20)')
+    
+    args = parser.parse_args(sys.argv[2:])
+    
+    try:
+        from markrypt import Markrypt
+        mk = Markrypt(enable_steganography=True, cipher_mode=args.cipher_mode)
+        
+        print(f"🖼️ Hiding message in image...")
+        print(f"📁 Cover image: {args.image}")
+        print(f"💾 Output image: {args.output}")
+        
+        result = mk.encrypt_and_hide_in_image(
+            args.message, args.key, args.image, args.output, 
+            stego_password=args.stego_password
+        )
+        
+        print(f"✅ Message hidden successfully!")
+        print(f"📊 Capacity utilization: {result['utilization']}")
+        print(f"📏 Original message: {result['original_message_length']} chars")
+        print(f"🔐 Encrypted message: {result['encrypted_message_length']} chars")
+        
+    except Exception as e:
+        print(f"❌ Failed to hide message: {e}")
+        print("Install steganography dependencies: pip install markrypt[stego]")
+        sys.exit(1)
+
+
+def run_stego_extract():
+    """Extract message from image using steganography"""
+    parser = argparse.ArgumentParser(
+        prog="markrypt stego-extract",
+        description="Extract hidden message from image"
+    )
+    parser.add_argument('image', help='Image with hidden message')
+    parser.add_argument('--key', required=True, help='Decryption key')
+    parser.add_argument('--stego-password', help='Steganography password')
+    
+    args = parser.parse_args(sys.argv[2:])
+    
+    try:
+        from markrypt import Markrypt
+        mk = Markrypt(enable_steganography=True)
+        
+        print(f"🔍 Extracting message from image...")
+        print(f"📁 Image: {args.image}")
+        
+        message = mk.extract_and_decrypt_from_image(
+            args.image, args.key, stego_password=args.stego_password
+        )
+        
+        print(f"✅ Message extracted successfully!")
+        print(f"📝 Message: {message}")
+        
+    except Exception as e:
+        print(f"❌ Failed to extract message: {e}")
+        print("Install steganography dependencies: pip install markrypt[stego]")
+        sys.exit(1)
+
+
+def run_stego_analyze():
+    """Analyze image for steganography capacity"""
+    parser = argparse.ArgumentParser(
+        prog="markrypt stego-analyze",
+        description="Analyze image for steganography capacity"
+    )
+    parser.add_argument('image', help='Image to analyze')
+    
+    args = parser.parse_args(sys.argv[2:])
+    
+    try:
+        from markrypt import Markrypt
+        mk = Markrypt(enable_steganography=True)
+        
+        print(f"🔍 Analyzing image capacity...")
+        analysis = mk.analyze_image_capacity(args.image)
+        
+        print(f"✅ Analysis complete!")
+        print(f"📁 Image: {args.image}")
+        print(f"📏 Dimensions: {analysis['dimensions']}")
+        print(f"🔢 Total pixels: {analysis['total_pixels']:,}")
+        print(f"💾 Capacity: {analysis['capacity_chars']:,} characters ({analysis['capacity_kb']:.1f} KB)")
+        print(f"📊 File size: {analysis['file_size_bytes']:,} bytes")
+        
+        if analysis.get('suspected_steganography'):
+            print(f"⚠️  This image may already contain hidden data")
+        
+    except Exception as e:
+        print(f"❌ Failed to analyze image: {e}")
+        print("Install steganography dependencies: pip install markrypt[stego]")
+        sys.exit(1)
+
+
 def main():
-    """Main CLI entry point that routes to encrypt, decrypt, or test"""
+    """Main CLI entry point that routes to encrypt, decrypt, test, pqc, or stego commands"""
     parser = argparse.ArgumentParser(
         prog="markrypt",
-        description="Markrypt - Markov-based text obfuscation and encryption",
+        description="Markrypt - Advanced text obfuscation with post-quantum cryptography and steganography",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Commands:
-  encrypt    Encrypt text with Markov-based noise insertion
-  decrypt    Decrypt Markrypt-encrypted text
-  test       Run Markrypt test suite
+  encrypt       Encrypt text with Markov-based noise insertion
+  decrypt       Decrypt Markrypt-encrypted text
+  test          Run Markrypt test suite
+  pqc-keygen    Generate post-quantum cryptography keypairs
+  stego-hide    Hide encrypted message in image
+  stego-extract Extract hidden message from image
+  stego-analyze Analyze image steganography capacity
   
 Examples:
   markrypt encrypt "Hello World" --key mykey
   markrypt decrypt "v1:..." --key mykey
   markrypt test --level quick
-  markrypt test --level comprehensive --output-dir ./my-test-results
+  markrypt pqc-keygen --type kyber --output-dir ./keys
+  markrypt stego-hide "Secret message" --key mykey --image cover.png --output hidden.png
+  markrypt stego-extract hidden.png --key mykey
+  markrypt stego-analyze cover.png
   
   # Get command-specific help:
   markrypt encrypt --help
-  markrypt decrypt --help
-  markrypt test --help
+  markrypt pqc-keygen --help
+  markrypt stego-hide --help
   
   # Use dedicated tools:
   markrypt-encrypt "Hello World" --key mykey --analyze
@@ -110,7 +264,8 @@ Examples:
         """
     )
     
-    parser.add_argument("command", choices=["encrypt", "decrypt", "test"], help="Operation to perform")
+    parser.add_argument("command", choices=["encrypt", "decrypt", "test", "pqc-keygen", "stego-hide", "stego-extract", "stego-analyze"], 
+                       help="Operation to perform")
     parser.add_argument("args", nargs=argparse.REMAINDER, help="Arguments for the command")
     
     # Parse only the command first
@@ -130,6 +285,14 @@ Examples:
         decrypt_main()
     elif command == "test":
         run_tests()
+    elif command == "pqc-keygen":
+        run_pqc_keygen()
+    elif command == "stego-hide":
+        run_stego_hide()
+    elif command == "stego-extract":
+        run_stego_extract()
+    elif command == "stego-analyze":
+        run_stego_analyze()
     else:
         parser.print_help()
         sys.exit(1)

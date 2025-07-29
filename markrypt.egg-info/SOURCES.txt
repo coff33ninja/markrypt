@@ -1,7 +1,10 @@
+CHANGELOG.md
 MANIFEST.in
 README.md
+examples.py
 setup.py
 markrypt/__init__.py
+markrypt/__main__.py
 markrypt/cli.py
 markrypt/core.py
 markrypt/exceptions.py

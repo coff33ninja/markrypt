@@ -34,7 +34,7 @@ Examples:
     parser.add_argument("--seed", type=int, help="Random seed for reproducibility")
     parser.add_argument("--no-noise", action="store_false", dest="noise", help="Disable noise insertion")
     parser.add_argument("--no-symbols", action="store_false", dest="preserve_symbols", help="Strip symbols")
-    parser.add_argument("--noise-style", choices=["markov", "lowercase", "custom"], default="markov", help="Noise style")
+    parser.add_argument("--noise-style", choices=["markov", "lowercase", "custom", "emoji"], default="markov", help="Noise style")
     parser.add_argument("--custom-noise", help="Custom noise character set")
     parser.add_argument("--noise-exclude", help="Characters to exclude from noise")
     parser.add_argument("--no-integrity", action="store_false", dest="integrity_check", help="Disable integrity check")
@@ -45,6 +45,7 @@ Examples:
     parser.add_argument("--no-encrypt-metadata", action="store_false", dest="encrypt_metadata", help="Disable metadata encryption")
     parser.add_argument("--unicode-range", choices=["basic", "full"], default="basic", help="Unicode character range")
     parser.add_argument("--unicode-blocks", nargs="*", help="Specific Unicode blocks")
+    parser.add_argument("--cipher-mode", choices=["substitution", "chacha20"], default="substitution", help="Encryption cipher mode")
     parser.add_argument("--analyze", action="store_true", help="Analyze message before encryption")
     parser.add_argument("--suggest", action="store_true", help="Get encryption suggestions")
     parser.add_argument("--batch", help="Batch encrypt from JSON file")
@@ -66,7 +67,8 @@ Examples:
                 custom_noise_chars=args.custom_noise,
                 noise_exclude=args.noise_exclude,
                 unicode_range=args.unicode_range,
-                unicode_blocks=args.unicode_blocks
+                unicode_blocks=args.unicode_blocks,
+                cipher_mode=args.cipher_mode
             )
             
             result = encryptor.batch_encrypt(
@@ -133,7 +135,8 @@ Examples:
             custom_noise_chars=args.custom_noise,
             noise_exclude=args.noise_exclude,
             unicode_range=args.unicode_range,
-            unicode_blocks=args.unicode_blocks
+            unicode_blocks=args.unicode_blocks,
+            cipher_mode=args.cipher_mode
         )
         
         # Encrypt message

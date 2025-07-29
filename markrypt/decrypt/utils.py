@@ -24,7 +24,7 @@ def validate_encrypted_format(encrypted_message):
     if not encrypted_message:
         raise ValidationError("Encrypted message cannot be empty")
     
-    if not encrypted_message.startswith('v1:'):
+    if not (encrypted_message.startswith('v1:') or encrypted_message.startswith('v2:')):
         raise ValidationError("Invalid or unsupported message format")
     
     parts = encrypted_message.split(':')

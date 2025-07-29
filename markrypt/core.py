@@ -11,9 +11,12 @@ import zlib
 import os
 import unicodedata
 from .exceptions import MarkryptError, ValidationError, DecryptionError, IntegrityError
+from .pqc import create_pqc_instance
+from .steganography import create_steganography_instance
 
 try:
     from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+    from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
     from cryptography.hazmat.backends import default_backend
     CRYPTO_AVAILABLE = True
 except ImportError:
@@ -37,7 +40,8 @@ class Markrypt:
     
     def __init__(self, seed=None, mapping_key=None, preserve_symbols=True, noise=True, 
                  noise_style='markov', custom_noise_chars=None, noise_exclude=None, 
-                 unicode_range='basic', unicode_blocks=None):
+                 unicode_range='basic', unicode_blocks=None, cipher_mode='substitution',
+                 enable_pqc=False, enable_steganography=False):
         """
         Initialize Markrypt with configuration options
         
@@ -46,11 +50,14 @@ class Markrypt:
             mapping_key: Key for character mapping
             preserve_symbols: Keep symbols unchanged during encryption
             noise: Enable noise insertion
-            noise_style: Style of noise ('markov', 'lowercase', 'custom')
+            noise_style: Style of noise ('markov', 'lowercase', 'custom', 'emoji')
             custom_noise_chars: Custom characters for noise (when style='custom')
             noise_exclude: Characters to exclude from noise
             unicode_range: Unicode range to use ('basic', 'full')
             unicode_blocks: Specific Unicode blocks to include
+            cipher_mode: Encryption mode ('substitution', 'chacha20', 'pqc')
+            enable_pqc: Enable post-quantum cryptography features
+            enable_steganography: Enable steganography features
         """
         self.vowels = set('aeiouAEIOU')
         self.consonants = set('bcdfghjklmnpqrstvwxyzBCDFGHJKLMNPQRSTVWXYZ')
@@ -68,11 +75,18 @@ class Markrypt:
         self.seed = seed
         self.unicode_range = unicode_range
         self.unicode_blocks = unicode_blocks or []
+        self.cipher_mode = cipher_mode
+        self.enable_pqc = enable_pqc
+        self.enable_steganography = enable_steganography
         
         # Internal state
         self._char_map_cache = {}
         self.char_map = {}
         self.reverse_map = {}
+        
+        # Initialize optional modules
+        self.pqc = create_pqc_instance() if enable_pqc else None
+        self.steganography = create_steganography_instance() if enable_steganography else None
         
         if seed is not None:
             random.seed(seed)
@@ -100,7 +114,8 @@ class Markrypt:
             all_chars = (
                 list(string.ascii_letters + string.digits + string.punctuation) +
                 [chr(i) for i in range(161, 256)] +
-                ['😀', '😂', '😊', '🔥', '⭐', '💡', '🌍', '🚀']
+                ['😀', '😂', '😊', '🔥', '⭐', '💡', '🌍', '🚀'] +
+                self._get_emoji_noise_chars()  # Include emoji noise chars in mapping
             )
         elif self.unicode_range == 'full':
             all_chars = [chr(i) for i in range(32, 0x110000) if unicodedata.category(chr(i))[0] != 'C']
@@ -191,6 +206,76 @@ class Markrypt:
         img.save(filename)
         return filename
 
+    def _chacha20_encrypt(self, plaintext, key):
+        """Encrypt using ChaCha20-Poly1305 AEAD cipher"""
+        if not CRYPTO_AVAILABLE:
+            raise MarkryptError("ChaCha20 encryption requires 'cryptography' library")
+        
+        # Derive 32-byte key from mapping key
+        key_bytes = hashlib.sha256(self._stretch_key(key).encode()).digest()
+        
+        # Create ChaCha20Poly1305 cipher
+        cipher = ChaCha20Poly1305(key_bytes)
+        nonce = os.urandom(12)  # ChaCha20 uses 12-byte nonce
+        
+        # Encrypt the plaintext
+        ciphertext = cipher.encrypt(nonce, plaintext.encode('utf-8'), None)
+        
+        # Return base64-encoded nonce + ciphertext
+        return base64.b64encode(nonce + ciphertext).decode('utf-8')
+
+    def _chacha20_decrypt(self, ciphertext_b64, key):
+        """Decrypt using ChaCha20-Poly1305 AEAD cipher"""
+        if not CRYPTO_AVAILABLE:
+            raise MarkryptError("ChaCha20 decryption requires 'cryptography' library")
+        
+        # Derive 32-byte key from mapping key
+        key_bytes = hashlib.sha256(self._stretch_key(key).encode()).digest()
+        
+        # Create ChaCha20Poly1305 cipher
+        cipher = ChaCha20Poly1305(key_bytes)
+        
+        # Decode and split nonce + ciphertext
+        data = base64.b64decode(ciphertext_b64)
+        nonce, ciphertext = data[:12], data[12:]
+        
+        # Decrypt and return plaintext
+        plaintext = cipher.decrypt(nonce, ciphertext, None)
+        return plaintext.decode('utf-8')
+
+    def _pqc_encrypt(self, plaintext, recipient_public_key):
+        """Encrypt using post-quantum cryptography (hybrid approach)"""
+        if not self.pqc:
+            raise MarkryptError("Post-quantum cryptography not enabled or available")
+        
+        # Use hybrid encryption for efficiency
+        encrypted_data = self.pqc.hybrid_encrypt(plaintext, recipient_public_key)
+        
+        # Encode as base64 for storage
+        return base64.b64encode(json.dumps(encrypted_data).encode('utf-8')).decode('utf-8')
+
+    def _pqc_decrypt(self, ciphertext_b64, recipient_secret_key):
+        """Decrypt using post-quantum cryptography"""
+        if not self.pqc:
+            raise MarkryptError("Post-quantum cryptography not enabled or available")
+        
+        # Decode and parse encrypted data
+        encrypted_data = json.loads(base64.b64decode(ciphertext_b64).decode('utf-8'))
+        
+        # Decrypt using hybrid approach
+        return self.pqc.hybrid_decrypt(encrypted_data, recipient_secret_key)
+
+    def _get_emoji_noise_chars(self):
+        """Get chaotic emoji characters for noise injection"""
+        return [
+            '🌪️', '🚀', '💥', '⚡', '🔥', '💫', '🌟', '✨', '🎆', '🎇',
+            '🌈', '🌊', '🌀', '💨', '☄️', '🌙', '⭐', '🌞', '🌝', '🌛',
+            '🎭', '🎪', '🎨', '🎯', '🎲', '🎰', '🎳', '🎮', '🕹️', '🎸',
+            '🚁', '🛸', '🚂', '🚄', '🚅', '🚆', '🚇', '🚈', '🚉', '🚊',
+            '🔮', '💎', '💍', '👑', '🏆', '🥇', '🥈', '🥉', '🏅', '🎖️',
+            '🦄', '🐉', '🦋', '🐙', '🦑', '🐠', '🐡', '🦈', '🐳', '🐋'
+        ]
+
     def encrypt(self, message, mapping_key=None, integrity_check=True, qr_file=None, 
                 json_output=False, encrypt_metadata=False):
         """
@@ -210,7 +295,64 @@ class Markrypt:
         try:
             self._validate_input(message)
             mapping_key = self._validate_key(mapping_key)
+            
+            # Handle ChaCha20 mode
+            if self.cipher_mode == 'chacha20':
+                encrypted_data = self._chacha20_encrypt(message, mapping_key)
+                salt = os.urandom(16).hex() if integrity_check else ""
+                output = f"v2:chacha20:{encrypted_data}:{salt}"
+                
+                if integrity_check:
+                    integrity_hash = self._compute_integrity_hash(message, mapping_key, salt)
+                    output += f":{integrity_hash}"
+                
+                if qr_file:
+                    self._generate_qr_code(output, qr_file)
+                
+                if json_output:
+                    return {
+                        "version": "v2",
+                        "cipher": "chacha20",
+                        "data": encrypted_data,
+                        "salt": salt,
+                        "hash": integrity_hash if integrity_check else "",
+                        "generated_key": mapping_key if not self._validate_key(mapping_key, api_mode=True) else None
+                    }
+                return output
+            
+            # Handle Post-Quantum Cryptography mode
+            if self.cipher_mode == 'pqc':
+                if not mapping_key:
+                    raise ValidationError("PQC mode requires a recipient public key as mapping_key")
+                
+                encrypted_data = self._pqc_encrypt(message, mapping_key)
+                salt = os.urandom(16).hex() if integrity_check else ""
+                output = f"v3:pqc:{encrypted_data}:{salt}"
+                
+                if integrity_check:
+                    integrity_hash = self._compute_integrity_hash(message, mapping_key, salt)
+                    output += f":{integrity_hash}"
+                
+                if qr_file:
+                    self._generate_qr_code(output, qr_file)
+                
+                if json_output:
+                    return {
+                        "version": "v3",
+                        "cipher": "pqc",
+                        "data": encrypted_data,
+                        "salt": salt,
+                        "hash": integrity_hash if integrity_check else "",
+                        "recipient_public_key": mapping_key
+                    }
+                return output
+            
+            # Original substitution cipher mode
             self._create_mappings(mapping_key)
+            
+            # Set seed for consistent randomization
+            if self.seed is not None:
+                random.seed(self.seed)
             
             # Auto-disable noise for very large texts to prevent issues
             original_noise = self.noise
@@ -219,9 +361,6 @@ class Markrypt:
                 print(f"Warning: Disabling noise for large text ({len(message)} chars) to prevent processing issues")
                 self.noise = False
                 noise_disabled_for_size = True
-            
-            if self.seed is not None:
-                random.seed(self.seed)
             
             result = []
             metadata = []
@@ -241,6 +380,8 @@ class Markrypt:
                             candidates = list(string.ascii_lowercase)
                         elif self.noise_style == 'custom':
                             candidates = list(self.custom_noise_chars)
+                        elif self.noise_style == 'emoji':
+                            candidates = self._get_emoji_noise_chars()
                         else:
                             raise ValidationError(f"Unknown noise style: {self.noise_style}")
                         
@@ -311,9 +452,49 @@ class Markrypt:
             if self.seed is not None:
                 random.seed(self.seed)
             
-            parts = encrypted_message.split(':', 4)  # Split into max 5 parts
-            if len(parts) < 4 or parts[0] != 'v1':
-                raise DecryptionError(f"Invalid message format or unsupported version: {parts[0] if parts else 'empty'}")
+            parts = encrypted_message.split(':', 5)  # Split into max 6 parts
+            if len(parts) < 4:
+                raise DecryptionError("Invalid message format: insufficient parts")
+            
+            version = parts[0]
+            if version not in ['v1', 'v2', 'v3']:
+                raise DecryptionError(f"Unsupported version: {version}")
+            
+            # Handle ChaCha20 mode (v2)
+            if version == 'v2' and len(parts) >= 4 and parts[1] == 'chacha20':
+                encrypted_data, salt = parts[2], parts[3]
+                integrity_hash = parts[4] if len(parts) > 4 and verify_integrity else None
+                
+                # Decrypt using ChaCha20
+                decrypted_message = self._chacha20_decrypt(encrypted_data, mapping_key)
+                
+                # Verify integrity if requested
+                if verify_integrity and integrity_hash:
+                    computed_hash = self._compute_integrity_hash(decrypted_message, mapping_key, salt)
+                    if computed_hash != integrity_hash:
+                        raise IntegrityError("Integrity check failed: message may have been tampered")
+                
+                return decrypted_message
+            
+            # Handle Post-Quantum Cryptography mode (v3)
+            if version == 'v3' and len(parts) >= 4 and parts[1] == 'pqc':
+                encrypted_data, salt = parts[2], parts[3]
+                integrity_hash = parts[4] if len(parts) > 4 and verify_integrity else None
+                
+                # Decrypt using PQC (mapping_key should be recipient's secret key)
+                decrypted_message = self._pqc_decrypt(encrypted_data, mapping_key)
+                
+                # Verify integrity if requested
+                if verify_integrity and integrity_hash:
+                    computed_hash = self._compute_integrity_hash(decrypted_message, mapping_key, salt)
+                    if computed_hash != integrity_hash:
+                        raise IntegrityError("Integrity check failed: message may have been tampered")
+                
+                return decrypted_message
+            
+            # Handle original substitution cipher (v1)
+            if version != 'v1':
+                raise DecryptionError(f"Invalid message format for version {version}")
             
             metadata_b64, message_b64, salt = parts[1], parts[2], parts[3]
             integrity_hash = parts[4] if len(parts) > 4 and verify_integrity else None
@@ -359,3 +540,127 @@ class Markrypt:
             return decrypted_message
         except Exception as e:
             raise DecryptionError(f"Decryption failed: {str(e)}")
+
+    def encrypt_and_hide_in_image(self, message, mapping_key, image_path, output_path, 
+                                  stego_password=None, **encrypt_kwargs):
+        """
+        Encrypt message and hide it in an image using steganography
+        
+        Args:
+            message: Text to encrypt and hide
+            mapping_key: Encryption key
+            image_path: Path to cover image
+            output_path: Path for output image with hidden message
+            stego_password: Optional password for steganography layer
+            **encrypt_kwargs: Additional arguments for encryption
+            
+        Returns:
+            dict with operation details
+        """
+        if not self.steganography:
+            raise MarkryptError("Steganography not enabled or available")
+        
+        # First encrypt the message
+        encrypted_message = self.encrypt(message, mapping_key, **encrypt_kwargs)
+        
+        # Then hide the encrypted message in the image
+        result = self.steganography.hide_message_in_image(
+            encrypted_message, image_path, output_path, stego_password
+        )
+        
+        result['original_message_length'] = len(message)
+        result['encrypted_message_length'] = len(encrypted_message)
+        return result
+
+    def extract_and_decrypt_from_image(self, image_path, mapping_key, 
+                                       stego_password=None, **decrypt_kwargs):
+        """
+        Extract hidden message from image and decrypt it
+        
+        Args:
+            image_path: Path to image with hidden message
+            mapping_key: Decryption key
+            stego_password: Password for steganography layer
+            **decrypt_kwargs: Additional arguments for decryption
+            
+        Returns:
+            Decrypted message
+        """
+        if not self.steganography:
+            raise MarkryptError("Steganography not enabled or available")
+        
+        # Extract encrypted message from image
+        encrypted_message = self.steganography.extract_message_from_image(
+            image_path, stego_password
+        )
+        
+        # Decrypt the extracted message
+        return self.decrypt(encrypted_message, mapping_key, **decrypt_kwargs)
+
+    def generate_pqc_keypair(self, key_type='kyber'):
+        """
+        Generate post-quantum cryptography keypair
+        
+        Args:
+            key_type: Type of keypair ('kyber' for KEM, 'dilithium' for signatures)
+            
+        Returns:
+            dict with public_key and secret_key
+        """
+        if not self.pqc:
+            raise MarkryptError("Post-quantum cryptography not enabled or available")
+        
+        if key_type == 'kyber':
+            return self.pqc.generate_kyber_keypair()
+        elif key_type == 'dilithium':
+            return self.pqc.generate_dilithium_keypair()
+        else:
+            raise ValidationError(f"Unknown key type: {key_type}")
+
+    def sign_message(self, message, secret_key):
+        """
+        Sign message using Dilithium post-quantum signature
+        
+        Args:
+            message: Message to sign
+            secret_key: Dilithium secret key (base64)
+            
+        Returns:
+            Base64-encoded signature
+        """
+        if not self.pqc:
+            raise MarkryptError("Post-quantum cryptography not enabled or available")
+        
+        return self.pqc.dilithium_sign(message, secret_key)
+
+    def verify_signature(self, message, signature, public_key):
+        """
+        Verify Dilithium signature
+        
+        Args:
+            message: Original message
+            signature: Base64-encoded signature
+            public_key: Dilithium public key (base64)
+            
+        Returns:
+            bool indicating if signature is valid
+        """
+        if not self.pqc:
+            raise MarkryptError("Post-quantum cryptography not enabled or available")
+        
+        return self.pqc.dilithium_verify(message, signature, public_key)
+
+    def analyze_image_capacity(self, image_path):
+        """
+        Analyze image for steganography capacity
+        
+        Args:
+            image_path: Path to image
+            
+        Returns:
+            dict with capacity analysis
+        """
+        if not self.steganography:
+            raise MarkryptError("Steganography not enabled or available")
+        
+        return self.steganography.analyze_image_for_steganography(image_path)

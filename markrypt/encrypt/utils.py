@@ -33,8 +33,9 @@ def validate_options(options):
     Raises:
         ValidationError: If options are invalid
     """
-    valid_noise_styles = ['markov', 'lowercase', 'custom']
+    valid_noise_styles = ['markov', 'lowercase', 'custom', 'emoji']
     valid_unicode_ranges = ['basic', 'full']
+    valid_cipher_modes = ['substitution', 'chacha20']
     
     # Set defaults
     defaults = {
@@ -45,7 +46,8 @@ def validate_options(options):
         'custom_noise_chars': None,
         'noise_exclude': None,
         'unicode_range': 'basic',
-        'unicode_blocks': None
+        'unicode_blocks': None,
+        'cipher_mode': 'substitution'
     }
     
     # Merge with defaults
@@ -58,6 +60,10 @@ def validate_options(options):
     # Validate unicode range
     if validated['unicode_range'] not in valid_unicode_ranges:
         raise ValidationError(f"Invalid unicode_range. Must be one of: {valid_unicode_ranges}")
+    
+    # Validate cipher mode
+    if validated['cipher_mode'] not in valid_cipher_modes:
+        raise ValidationError(f"Invalid cipher_mode. Must be one of: {valid_cipher_modes}")
     
     # Validate custom noise chars
     if validated['noise_style'] == 'custom' and not validated['custom_noise_chars']:

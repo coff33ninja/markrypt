@@ -5,8 +5,8 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="markrypt",
-    version="1.0.0",
-    description="Markov-based text obfuscation with encryption and decryption modules",
+    version="2.3.0",
+    description="Advanced text obfuscation with post-quantum cryptography, steganography, ChaCha20 encryption, and Markov-based patterns",
     long_description=long_description,
     long_description_content_type="text/markdown",
     author="coff33ninja",
@@ -18,7 +18,9 @@ setup(
         "crypto": ["cryptography"],
         "qr": ["qrcode[pil]"],
         "api": ["fastapi", "uvicorn"],
-        "full": ["cryptography", "qrcode[pil]", "fastapi", "uvicorn"],
+        "pqc": ["pqcrypto", "kyber-py"],
+        "stego": ["Pillow", "numpy", "opencv-python"],
+        "full": ["cryptography", "qrcode[pil]", "fastapi", "uvicorn", "pqcrypto", "kyber-py", "Pillow", "numpy", "opencv-python"],
     },
     entry_points={
         "console_scripts": [
@@ -41,5 +43,5 @@ setup(
         "Topic :: Security :: Cryptography",
         "Topic :: Text Processing",
     ],
-    keywords="encryption, obfuscation, markov, text, security",
+    keywords="encryption, obfuscation, markov, text, security, chacha20, emoji, stream-cipher, post-quantum, steganography, kyber, dilithium",
 )

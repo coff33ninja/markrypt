@@ -1,11 +1,11 @@
-Metadata-Version: 2.4
+Metadata-Version: 2.1
 Name: markrypt
-Version: 1.0.0
-Summary: Markov-based text obfuscation with encryption and decryption modules
+Version: 2.0.0
+Summary: Advanced text obfuscation with ChaCha20 encryption, emoji noise, and Markov-based patterns
 Home-page: https://github.com/coff33ninja/markrypt
-Author: DJ
+Author: coff33ninja
 Author-email: coff33ninja69@gmail.com
-Keywords: encryption,obfuscation,markov,text,security
+Keywords: encryption,obfuscation,markov,text,security,chacha20,emoji,stream-cipher
 Classifier: Development Status :: 4 - Beta
 Classifier: Intended Audience :: Developers
 Classifier: License :: OSI Approved :: MIT License
@@ -20,27 +20,9 @@ Classifier: Topic :: Text Processing
 Requires-Python: >=3.8
 Description-Content-Type: text/markdown
 Provides-Extra: crypto
-Requires-Dist: cryptography; extra == "crypto"
 Provides-Extra: qr
-Requires-Dist: qrcode[pil]; extra == "qr"
 Provides-Extra: api
-Requires-Dist: fastapi; extra == "api"
-Requires-Dist: uvicorn; extra == "api"
 Provides-Extra: full
-Requires-Dist: cryptography; extra == "full"
-Requires-Dist: qrcode[pil]; extra == "full"
-Requires-Dist: fastapi; extra == "full"
-Requires-Dist: uvicorn; extra == "full"
-Dynamic: author
-Dynamic: author-email
-Dynamic: classifier
-Dynamic: description
-Dynamic: description-content-type
-Dynamic: home-page
-Dynamic: keywords
-Dynamic: provides-extra
-Dynamic: requires-python
-Dynamic: summary
 
 # Markrypt
 
@@ -48,8 +30,9 @@ A comprehensive text obfuscation library that uses Markov chains for realistic n
 
 ## Features
 
-- **Character Substitution**: Unicode-based character mapping for encryption
+- **Dual Cipher Modes**: Character substitution and ChaCha20 stream cipher
 - **Markov Noise**: Realistic noise insertion using vowel/consonant patterns
+- **Emoji Noise Mode**: Chaotic emoji injection for enhanced obfuscation
 - **Multiple Modes**: Basic, full Unicode, and custom character ranges
 - **Integrity Verification**: SHA-256 hash verification with salt
 - **Metadata Encryption**: Optional AES-GCM encryption for metadata
@@ -115,7 +98,8 @@ markrypt-decrypt "v1:..." --key mykey --check-key
 
 ### Encryption Options
 
-- **Noise Styles**: `markov`, `lowercase`, `custom`
+- **Cipher Modes**: `substitution` (character mapping), `chacha20` (stream cipher)
+- **Noise Styles**: `markov`, `lowercase`, `custom`, `emoji`
 - **Unicode Ranges**: `basic`, `full`, custom blocks
 - **Symbol Preservation**: Keep or strip special characters
 - **Integrity Checking**: SHA-256 verification
@@ -141,7 +125,8 @@ mk = Markrypt(
     seed=42,
     noise=True,
     noise_style='markov',
-    preserve_symbols=True
+    preserve_symbols=True,
+    cipher_mode='substitution'  # or 'chacha20'
 )
 
 # Encrypt
@@ -193,14 +178,44 @@ else:
     print(f"Decryption failed: {result['error']}")
 ```
 
+### ChaCha20 Stream Cipher
+
+```python
+from markrypt import Markrypt
+
+# Use ChaCha20 for stronger encryption
+mk = Markrypt(cipher_mode='chacha20')
+encrypted = mk.encrypt("Secret message", mapping_key="strongkey")
+decrypted = mk.decrypt(encrypted, mapping_key="strongkey")
+
+# ChaCha20 with emoji noise
+mk = Markrypt(cipher_mode='chacha20', noise_style='emoji')
+encrypted = mk.encrypt("Top secret! 🔒", mapping_key="mykey")
+```
+
+### Emoji Noise Mode
+
+```python
+from markrypt import Markrypt
+
+# Chaotic emoji injection
+mk = Markrypt(noise_style='emoji', noise=True)
+encrypted = mk.encrypt("Hello World", mapping_key="key")
+# Result includes random emojis: "H🌪️e🚀l💥l⚡o🔥 W💫o🌟r✨l🎆d"
+
+# Combine with ChaCha20 for maximum security
+mk = Markrypt(cipher_mode='chacha20', noise_style='emoji')
+encrypted = mk.encrypt("Classified data", mapping_key="topSecret")
+```
+
 ### File Operations
 
 ```python
 from markrypt.encrypt import MarkryptEncryptor
 from markrypt.decrypt import MarkryptDecryptor
 
-# Encrypt file
-encryptor = MarkryptEncryptor()
+# Encrypt file with ChaCha20
+encryptor = MarkryptEncryptor(cipher_mode='chacha20')
 encryptor.encrypt_file("message.txt", "encrypted.txt", key="filekey")
 
 # Decrypt file
@@ -227,6 +242,9 @@ markrypt-encrypt --batch messages.json --output-file results.json
 
 # Custom noise settings
 markrypt-encrypt "Hello" --noise-style custom --custom-noise "xyz123"
+
+# ChaCha20 encryption with emoji noise
+markrypt-encrypt "Secret" --cipher-mode chacha20 --noise-style emoji
 ```
 
 ### Decryption CLI
@@ -256,8 +274,9 @@ markrypt-decrypt "v1:..." --detect-corruption
 - `mapping_key`: Key for character substitution
 - `preserve_symbols`: Keep symbols unchanged
 - `noise`: Enable noise insertion
-- `noise_style`: Type of noise ('markov', 'lowercase', 'custom')
+- `noise_style`: Type of noise ('markov', 'lowercase', 'custom', 'emoji')
 - `unicode_range`: Character range ('basic', 'full')
+- `cipher_mode`: Encryption mode ('substitution', 'chacha20')
 
 ### Advanced Options
 
@@ -274,6 +293,8 @@ markrypt-decrypt "v1:..." --detect-corruption
 - Consider metadata encryption for sensitive applications
 - Keys are stretched using PBKDF2 with 100,000 iterations
 - Salt is randomly generated for each encryption
+- ChaCha20 mode provides authenticated encryption with stronger security than substitution mode
+- Emoji noise mode is experimental and may have encoding limitations with integrity checking
 
 ## Dependencies
 

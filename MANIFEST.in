@@ -1,6 +1,14 @@
 include README.md
-include LICENSE
 include CHANGELOG.md
+include LICENSE
+include MANIFEST.in
+include examples.py
 recursive-include markrypt *.py
-recursive-exclude * __pycache__
-recursive-exclude * *.py[co]
+recursive-include markrypt/tests *.py
+recursive-exclude markrypt/__pycache__ *
+recursive-exclude markrypt/*/__pycache__ *
+recursive-exclude markrypt/*/*/__pycache__ *
+global-exclude *.pyc
+global-exclude *.pyo
+global-exclude *~
+global-exclude .DS_Store
